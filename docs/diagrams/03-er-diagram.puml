@@ -1,0 +1,97 @@
+@startuml Modelo de Datos - Sistema Ticketero
+
+!define Table(name,desc) class name as "desc" << (T,#FFAAAA) >>
+!define primary_key(x) <b>PK: x</b>
+!define foreign_key(x) <color:red>FK: x</color>
+!define unique(x) <color:green>UQ: x</color>
+
+hide methods
+hide stereotypes
+
+' Entidades
+
+Table(ticket, "ticket") {
+  primary_key(id: BIGSERIAL)
+  unique(codigo_referencia: UUID)
+  unique(numero: VARCHAR(10))
+  national_id: VARCHAR(20)
+  telefono: VARCHAR(20)
+  branch_office: VARCHAR(100)
+  queue_type: VARCHAR(20)
+  status: VARCHAR(20)
+  position_in_queue: INTEGER
+  estimated_wait_minutes: INTEGER
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+  foreign_key(assigned_advisor_id: BIGINT)
+  assigned_module_number: INTEGER
+}
+
+Table(mensaje, "mensaje") {
+  primary_key(id: BIGSERIAL)
+  foreign_key(ticket_id: BIGINT)
+  plantilla: VARCHAR(50)
+  estado_envio: VARCHAR(20)
+  fecha_programada: TIMESTAMP
+  fecha_envio: TIMESTAMP
+  telegram_message_id: VARCHAR(50)
+  intentos: INTEGER
+  created_at: TIMESTAMP
+}
+
+Table(advisor, "advisor") {
+  primary_key(id: BIGSERIAL)
+  name: VARCHAR(100)
+  email: VARCHAR(100)
+  status: VARCHAR(20)
+  module_number: INTEGER
+  assigned_tickets_count: INTEGER
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+}
+
+' Relaciones
+
+ticket "1" -- "0..*" mensaje : "tiene mensajes programados"
+advisor "1" -- "0..*" ticket : "atiende tickets"
+
+' Notas
+
+note right of ticket
+  **Estados posibles:**
+  - EN_ESPERA
+  - PROXIMO
+  - ATENDIENDO
+  - COMPLETADO
+  - CANCELADO
+  - NO_ATENDIDO
+  
+  **Tipos de cola:**
+  - CAJA
+  - PERSONAL_BANKER
+  - EMPRESAS
+  - GERENCIA
+end note
+
+note right of mensaje
+  **Plantillas:**
+  - totem_ticket_creado
+  - totem_proximo_turno
+  - totem_es_tu_turno
+  
+  **Estados:**
+  - PENDIENTE
+  - ENVIADO
+  - FALLIDO
+end note
+
+note right of advisor
+  **Estados:**
+  - AVAILABLE
+  - BUSY
+  - OFFLINE
+  
+  **Módulos:** 1-5
+end note
+
+@enduml

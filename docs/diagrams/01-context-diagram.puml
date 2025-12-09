@@ -1,0 +1,26 @@
+@startuml Diagrama de Contexto - Sistema Ticketero
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Diagrama de Contexto (C4 Level 1) - Sistema Ticketero
+
+' Actores
+Person(cliente, "Cliente/Socio", "Persona que requiere atención en sucursal")
+Person(supervisor, "Supervisor de Sucursal", "Monitorea operación en tiempo real")
+
+' Sistema principal
+System(ticketero_api, "API Ticketero", "Sistema de gestión de tickets con notificaciones en tiempo real")
+
+' Sistemas externos
+System_Ext(telegram, "Telegram Bot API", "Servicio de mensajería para notificaciones push")
+System_Ext(terminal, "Terminal Autoservicio", "Kiosco para emisión de tickets")
+
+' Relaciones
+Rel(cliente, terminal, "Ingresa RUT y selecciona servicio", "Touch screen")
+Rel(terminal, ticketero_api, "Crea ticket", "HTTPS/JSON [POST /api/tickets]")
+Rel(ticketero_api, telegram, "Envía 3 notificaciones", "HTTPS/JSON [Telegram Bot API]")
+Rel(telegram, cliente, "Recibe mensajes de estado", "Mobile App")
+Rel(supervisor, ticketero_api, "Consulta dashboard", "HTTPS [GET /api/admin/dashboard]")
+
+SHOW_LEGEND()
+
+@enduml

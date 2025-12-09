@@ -1,0 +1,74 @@
+@startuml Secuencia Completa - Sistema Ticketero
+
+title Flujo End-to-End: Creación de Ticket y Asignación a Asesor
+
+actor Cliente
+participant "Terminal" as Terminal
+participant "TicketController" as Controller
+participant "TicketService" as Service
+participant "TelegramService" as Telegram
+participant "PostgreSQL" as DB
+participant "MessageScheduler" as Scheduler
+participant "QueueProcessor" as QueueProc
+participant "Advisor" as Asesor
+
+== Fase 1: Creación de Ticket ==
+
+Cliente -> Terminal: Ingresa RUT, teléfono, selecciona PERSONAL_BANKER
+Terminal -> Controller: POST /api/tickets
+Controller -> Service: crearTicket(request)
+Service -> DB: INSERT INTO ticket (numero: P01, status: EN_ESPERA, positionInQueue: 5)
+Service -> DB: INSERT INTO mensaje (3 mensajes programados)
+Service --> Controller: TicketResponse(numero: P01, positionInQueue: 5, estimatedWait: 75min)
+Controller --> Terminal: HTTP 201 + JSON
+Terminal --> Cliente: Muestra ticket P01
+
+== Fase 2: Envío de Mensaje 1 (Inmediato) ==
+
+note over Scheduler: Ejecuta cada 60 segundos
+Scheduler -> DB: SELECT mensajes WHERE estadoEnvio=PENDIENTE AND fechaProgramada <= NOW
+DB --> Scheduler: [Mensaje 1: totem_ticket_creado]
+Scheduler -> Telegram: POST sendMessage (chatId, "✅ Ticket P01, posición #5, 75min")
+Telegram --> Scheduler: {ok: true, message_id: 123}
+Scheduler -> DB: UPDATE mensaje SET estadoEnvio=ENVIADO, telegramMessageId=123
+Scheduler --> Cliente: Notificación en Telegram
+
+== Fase 3: Progreso de Cola (cuando posición <= 3) ==
+
+note over QueueProc: Ejecuta cada 5 segundos
+QueueProc -> DB: Recalcula posiciones de todos los tickets EN_ESPERA
+QueueProc -> DB: UPDATE ticket SET positionInQueue = (nueva posición)
+QueueProc -> DB: SELECT tickets WHERE positionInQueue <= 3 AND status = EN_ESPERA
+DB --> QueueProc: [Ticket P01, posición: 3]
+QueueProc -> DB: UPDATE ticket SET status = PROXIMO
+
+note over Scheduler: Detecta Mensaje 2 programado
+Scheduler -> Telegram: POST sendMessage ("⏰ Pronto será tu turno P01")
+Telegram --> Scheduler: {ok: true}
+Scheduler --> Cliente: Notificación Pre-aviso
+
+== Fase 4: Asignación Automática a Asesor ==
+
+QueueProc -> DB: SELECT advisors WHERE status=AVAILABLE ORDER BY assignedTicketsCount LIMIT 1
+DB --> QueueProc: [Advisor: María González, moduleNumber: 3]
+QueueProc -> DB: UPDATE ticket SET assignedAdvisor=María, assignedModuleNumber=3, status=ATENDIENDO
+QueueProc -> DB: UPDATE advisor SET status=BUSY, assignedTicketsCount=assignedTicketsCount+1
+
+note over Scheduler: Detecta Mensaje 3 programado
+Scheduler -> Telegram: POST sendMessage ("🔔 ES TU TURNO P01! Módulo 3, Asesora: María González")
+Telegram --> Scheduler: {ok: true}
+Scheduler --> Cliente: Notificación Turno Activo
+
+QueueProc -> Asesor: Notifica en terminal del asesor
+Asesor --> Cliente: Atiende al cliente en módulo 3
+
+== Fase 5: Completar Atención ==
+
+Asesor -> Controller: PUT /api/admin/advisors/1/complete-ticket
+Controller -> Service: completarTicket(ticketId)
+Service -> DB: UPDATE ticket SET status=COMPLETADO
+Service -> DB: UPDATE advisor SET status=AVAILABLE, assignedTicketsCount=assignedTicketsCount-1
+Service -> DB: INSERT INTO auditoria (evento: TICKET_COMPLETADO)
+Service --> Controller: {success: true}
+
+@enduml
